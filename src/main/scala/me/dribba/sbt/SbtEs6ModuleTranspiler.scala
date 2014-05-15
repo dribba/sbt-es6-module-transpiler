@@ -51,6 +51,8 @@ object SbtEs6ModuleTranspiler extends AutoPlugin {
 
   override def projectSettings = Seq(
 
+    moduleType := AMD
+
   ) ++ inTask(es6modules)(
     SbtJsTask.jsTaskSpecificUnscopedSettings ++
       inConfig(Assets)(es6moduleUnscopedSettings) ++
