@@ -9,7 +9,19 @@ import spray.json._
 object Import {
 
   object Es6ModulesKeys {
+
+    sealed abstract class ModuleType(val name: String)
+
+    case object AMD extends ModuleType("AMD")
+
+    case object CJS extends ModuleType("CJS")
+
+    case object YUI extends ModuleType("YUI")
+
+
     val es6modules = TaskKey[Seq[File]]("es6modules", "Compiles ES6 Modules import/export.")
+
+    val moduleType = SettingKey[ModuleType]("module-type", "Type of module structure to use when compiling")
   }
 
 }
@@ -29,7 +41,11 @@ object SbtEs6ModuleTranspiler extends AutoPlugin {
 
   val es6moduleUnscopedSettings = Seq(
 
-    includeFilter := GlobFilter("*.js")
+    includeFilter := GlobFilter("*.js"),
+
+    jsOptions := JsObject(
+      "moduleType" -> JsString(moduleType.value.name)
+    ).toString()
 
   )
 

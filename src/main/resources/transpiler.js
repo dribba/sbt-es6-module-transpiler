@@ -31,6 +31,42 @@
         }
     }
 
+    var Option = function (value) {
+        return {
+            getVal: function () {
+                if (typeof value == 'function') {
+                    return value();
+                } else if (typeof value != 'undefined' && value != null) {
+                    return value;
+                } else {
+                    throw "NoSuchElementException";
+                }
+            },
+
+            getOrElse: function (elseVal) {
+                try {
+                    return this.getVal()
+                } catch (e) {
+                    return Option(elseVal).getVal()
+                }
+            }
+        }
+    };
+
+    function compile(compiler, opts) {
+        var moduleType = Option(function () {
+            return opts.moduleType;
+        }).getOrElse('AMD');
+
+        if (moduleType == 'CJS') {
+            return compiler.toCJS();
+        } else if (moduleType == 'YUI') {
+            return compiler.toYUI();
+        } else {
+            return compiler.toAMD();
+        }
+    }
+
 //    function throwIfErr(e) {
 //        if (e) throw e;
 //    }
@@ -40,7 +76,6 @@
         var input = sourceFileMapping[0];
         var outputFile = sourceFileMapping[1];
         var output = path.join(target, outputFile);
-//        var sourceMapOutput = output + ".map";
 
         mkdirp(path.dirname(output), function (e) {
             fs.readFile(input, "utf8", function (e, contents) {
@@ -49,7 +84,7 @@
                 var Compiler = es6Transpiler.Compiler;
 
                 try {
-                    var compiled = new Compiler(contents, '', {}).toAMD()
+                    var compiled = compile(new Compiler(contents, '', {}), options);
                     fs.writeFile(output, compiled, "utf8", function (e) {
 //                throwIfErr(e);
 
