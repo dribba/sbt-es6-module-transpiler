@@ -16,3 +16,5 @@ lazy val root = (project in file(".")).enablePlugins(play.PlayScala)
 SbtCoffeeScript.autoImport.CoffeeScriptKeys.bare := true
 
 unmanagedSourceDirectories in(Assets, Es6ModulesKeys.es6modules) := (unmanagedSourceDirectories in Assets).value :+ (resourceManaged in(Assets, CoffeeScriptKeys.coffeescript)).value
+
+unmanagedSources in (Assets, Es6ModulesKeys.es6modules) := (unmanagedSources in Assets).value ++ (CoffeeScriptKeys.coffeescript in Assets).value
