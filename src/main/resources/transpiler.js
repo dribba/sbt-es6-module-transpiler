@@ -74,8 +74,12 @@
     sourceFileMappings.forEach(function (sourceFileMapping) {
 
         var input = sourceFileMapping[0];
+
+        // Hopefully always 'js/moduleName'
         var outputFile = sourceFileMapping[1];
         var output = path.join(target, outputFile);
+
+        var moduleName = outputFile.replace(/^js\//i, '').replace(/\.js$/i, '');
 
         mkdirp(path.dirname(output), function (e) {
             fs.readFile(input, "utf8", function (e, contents) {
@@ -84,7 +88,7 @@
                 var Compiler = es6Transpiler.Compiler;
 
                 try {
-                    var compiled = compile(new Compiler(contents, '', {}), options);
+                    var compiled = compile(new Compiler(contents, moduleName, {}), options);
                     fs.writeFile(output, compiled, "utf8", function (e) {
 //                throwIfErr(e);
 
