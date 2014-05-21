@@ -3,7 +3,7 @@
  */
 var App = {
     create: function () {
-        alert("App created!");
+        alert("App created! | Hello world!");
     }
 };
 

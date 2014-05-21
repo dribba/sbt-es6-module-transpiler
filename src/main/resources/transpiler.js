@@ -1,6 +1,6 @@
 (function () {
 
-    "use strict";
+//    "use strict";
 
     var args = process.argv,
         fs = require("fs"),
@@ -11,15 +11,14 @@
     var SOURCE_FILE_MAPPINGS_ARG = 2;
     var TARGET_ARG = 3;
     var OPTIONS_ARG = 4;
-//
+
     var sourceFileMappings = JSON.parse(args[SOURCE_FILE_MAPPINGS_ARG]);
     var target = args[TARGET_ARG];
     var options = JSON.parse(args[OPTIONS_ARG]);
 
-
 //    console.log(sourceFileMappings, "sourceFileMappings");
-//    console.log(target, "target");
 //    console.log(options, "options");
+
 
     var sourcesToProcess = sourceFileMappings.length;
     var results = [];
@@ -67,9 +66,9 @@
         }
     }
 
-//    function throwIfErr(e) {
-//        if (e) throw e;
-//    }
+    function throwIfErr(e) {
+        if (e) throw e;
+    }
 
     sourceFileMappings.forEach(function (sourceFileMapping) {
 
@@ -83,14 +82,14 @@
 
         mkdirp(path.dirname(output), function (e) {
             fs.readFile(input, "utf8", function (e, contents) {
-//            throwIfErr(e);
+                throwIfErr(e);
 
                 var Compiler = es6Transpiler.Compiler;
 
                 try {
                     var compiled = compile(new Compiler(contents, moduleName, {}), options);
                     fs.writeFile(output, compiled, "utf8", function (e) {
-//                throwIfErr(e);
+                        throwIfErr(e);
 
                         results.push({
                             source: input,

@@ -6,6 +6,8 @@ name := "sbt-es6-module-transpiler"
 
 version := "1.0.0-SNAPSHOT"
 
+//version := new java.util.Date().getTime.toString
+
 scalaVersion := "2.10.4"
 
 libraryDependencies ++= Seq(
@@ -22,5 +24,5 @@ publishTo := {
 
 scriptedSettings
 
-scriptedLaunchOpts <+= version apply { v => s"-Dproject.version=$v" }
+scriptedLaunchOpts <+= version apply { v => s"-Dproject.version=$v"}
 

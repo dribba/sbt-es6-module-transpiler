@@ -3,8 +3,15 @@ package me.dribba.sbt
 import sbt._
 import sbt.Keys._
 import com.typesafe.sbt.web._
-import com.typesafe.sbt.jse.SbtJsTask
-import spray.json._
+import com.typesafe.sbt.jse.{SbtJsEngine, SbtJsTask}
+import com.typesafe.sbt.web.pipeline.Pipeline
+import com.typesafe.sbt.web.PathMapping
+import java.nio.charset.Charset
+import com.typesafe.sbt.web.Import.WebKeys
+import spray.json.{JsObject, JsString, JsArray}
+import scala.collection.immutable
+import java.io.FileInputStream
+import sbt.Task
 
 object Import {
 
@@ -19,9 +26,10 @@ object Import {
     case object YUI extends ModuleType("YUI")
 
 
-    val es6modules = TaskKey[Seq[File]]("es6modules", "Compiles ES6 Modules import/export.")
+    val es6modules = TaskKey[Pipeline.Stage]("es6modules", "Compiles ES6 Modules import/export.")
 
     val moduleType = SettingKey[ModuleType]("module-type", "Type of module structure to use when compiling")
+
   }
 
 }
@@ -34,39 +42,96 @@ object SbtEs6ModuleTranspiler extends AutoPlugin {
 
   val autoImport = Import
 
-  import SbtWeb.autoImport._
-  import WebKeys._
-  import SbtJsTask.autoImport.JsTaskKeys._
   import autoImport.Es6ModulesKeys._
+  import WebKeys._
+  import SbtWeb.autoImport._
+  import SbtJsEngine.autoImport.JsEngineKeys._
+  import SbtJsTask.autoImport.JsTaskKeys._
 
   val es6moduleUnscopedSettings = Seq(
 
-    includeFilter := GlobFilter("*.js"),
+    includeFilter in es6modules := GlobFilter("*.js"),
+    excludeFilter in es6modules := HiddenFileFilter,
 
-    jsOptions := JsObject(
-      "moduleType" -> JsString(moduleType.value.name)
-    ).toString()
-
+    es6modules := runOptimizer.dependsOn(webModules in Assets).value
   )
 
   override def projectSettings = Seq(
 
-    moduleType := AMD
+    moduleType in es6modules := AMD,
 
-  ) ++ inTask(es6modules)(
-    SbtJsTask.jsTaskSpecificUnscopedSettings ++
-      inConfig(Assets)(es6moduleUnscopedSettings) ++
-      inConfig(TestAssets)(es6moduleUnscopedSettings) ++
-      Seq(
-        moduleName := "es6modules",
-        shellFile := getClass.getClassLoader.getResource("transpiler.js"),
+    resourceManaged in es6modules in Assets := webTarget.value / es6modules.key.label / "main",
+    resourceManaged in es6modules in TestAssets := webTarget.value / es6modules.key.label / "test"
 
-        taskMessage in Assets := "Transpiling",
-        taskMessage in TestAssets := "Transpiling"
+  ) ++ es6moduleUnscopedSettings
+
+
+  val Utf8 = Charset.forName("UTF-8")
+
+  private def runOptimizer: Def.Initialize[Task[Pipeline.Stage]] = Def.task {
+    mappings: Seq[PathMapping] =>
+
+      val include = (includeFilter in es6modules).value
+      val exclude = (excludeFilter in es6modules).value
+      val targetBase = (resourceManaged in es6modules in Assets).value
+
+      val jsOptions = JsObject(
+        "moduleType" -> JsString((moduleType in es6modules).value.name)
+      ).toString()
+
+      val webjarPattern = ".*webjars/lib.*".r
+
+      val transpilerMappings = mappings.filter(f => webjarPattern.findFirstMatchIn(f._1.getAbsolutePath).isEmpty).filter(f => {
+        !f._1.isDirectory && include.accept(f._1) && !exclude.accept(f._1)
+      })
+
+      val fileMap = transpilerMappings.map(f => f._1.getAbsolutePath -> f._2).toMap
+      //      println(transpilerMappings)
+
+
+      val transpiler = SbtWeb.copyResourceTo(
+        (target in Plugin).value / es6modules.key.label,
+        getClass.getClassLoader.getResource("transpiler.js"),
+        streams.value.cacheDirectory / "copy-resource"
       )
-  ) ++ SbtJsTask.addJsSourceFileTasks(es6modules) ++ Seq(
-    es6modules in Assets := (es6modules in Assets).dependsOn(webModules in Assets).value,
-    es6modules in TestAssets := (es6modules in TestAssets).dependsOn(webModules in TestAssets).value
-  )
+
+      val cacheDirectory = streams.value.cacheDirectory / es6modules.key.label
+      val runUpdate = FileFunction.cached(cacheDirectory, FilesInfo.hash) {
+        files =>
+
+          val filesToCompile = files.map(file => file -> fileMap(file.getAbsolutePath))
+          val jsonFilesToCompile = filesToCompile.map(x => JsArray(JsString(x._1.getCanonicalPath), JsString(x._2)))
+
+          //          println(filesToCompile)
+
+          val args = immutable.Seq(
+            JsArray(jsonFilesToCompile.toList).toString(),
+            targetBase.getAbsolutePath,
+            jsOptions
+          )
+
+          SbtJsTask.executeJs(
+            state.value,
+            (engineType in es6modules).value,
+            (command in es6modules).value,
+            (nodeModules in Plugin).value.map(_.getCanonicalPath),
+            transpiler,
+            args,
+            (timeoutPerSource in es6modules).value
+          )
+
+          files
+      }
+
+      runUpdate(transpilerMappings.map(_._1).toSet)
+
+      val strBase = targetBase.getAbsolutePath
+
+      // Got it from sbt-rjs
+      val compiled = targetBase.***.get.filter(f => f.isFile && f.getAbsolutePath.startsWith(strBase)).pair(relativeTo(targetBase))
+
+      (mappings.toSet -- transpilerMappings.toSet ++ compiled).toSeq
+  }
+
 
 }
