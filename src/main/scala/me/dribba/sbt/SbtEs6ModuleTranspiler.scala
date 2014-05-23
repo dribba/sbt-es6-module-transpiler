@@ -8,9 +8,10 @@ import com.typesafe.sbt.web.pipeline.Pipeline
 import com.typesafe.sbt.web.PathMapping
 import java.nio.charset.Charset
 import com.typesafe.sbt.web.Import.WebKeys
-import spray.json.{JsObject, JsString, JsArray}
+import spray.json._
 import scala.collection.immutable
 import java.io.FileInputStream
+import sbt.Task
 import sbt.Task
 
 object Import {
@@ -29,6 +30,10 @@ object Import {
     val es6modules = TaskKey[Pipeline.Stage]("es6modules", "Compiles ES6 Modules import/export.")
 
     val moduleType = SettingKey[ModuleType]("module-type", "Type of module structure to use when compiling")
+
+    val modulesPrefix = SettingKey[Option[String]]("module-prefix", "Prefix for all the compiled modules")
+
+    val includePublic = SettingKey[Boolean]("include-public", "Whether or not to include files in the public folder")
 
   }
 
@@ -60,6 +65,9 @@ object SbtEs6ModuleTranspiler extends AutoPlugin {
 
     moduleType in es6modules := AMD,
 
+    includePublic in es6modules := false,
+    modulesPrefix in es6modules := None,
+
     resourceManaged in es6modules in Assets := webTarget.value / es6modules.key.label / "main",
     resourceManaged in es6modules in TestAssets := webTarget.value / es6modules.key.label / "test"
 
@@ -75,13 +83,25 @@ object SbtEs6ModuleTranspiler extends AutoPlugin {
       val exclude = (excludeFilter in es6modules).value
       val targetBase = (resourceManaged in es6modules in Assets).value
 
-      val jsOptions = JsObject(
-        "moduleType" -> JsString((moduleType in es6modules).value.name)
-      ).toString()
+      val opts = JsObject(
+        "moduleType" -> JsString((moduleType in es6modules).value.name),
+        "prefix" -> (modulesPrefix in es6modules).value.fold[JsValue](JsNull)(JsString.apply)
+      )
+
+      val jsOptions = opts.toString()
 
       val webjarPattern = ".*webjars/lib.*".r
+      val public = ".*/public/.*".r
 
-      val transpilerMappings = mappings.filter(f => webjarPattern.findFirstMatchIn(f._1.getAbsolutePath).isEmpty).filter(f => {
+
+      val transpilerMappings = mappings.filter(file => {
+
+        webjarPattern.findFirstMatchIn(file._1.getAbsolutePath).isEmpty && (
+          (includePublic in es6modules).value ||
+            public.findFirstMatchIn(file._1.getAbsolutePath).isEmpty
+          )
+
+      }).filter(f => {
         !f._1.isDirectory && include.accept(f._1) && !exclude.accept(f._1)
       })
 

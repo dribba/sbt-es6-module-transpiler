@@ -30,27 +30,64 @@
         }
     }
 
-    var Option = function (value) {
-        return {
-            getVal: function () {
-                if (typeof value == 'function') {
-                    return value();
-                } else if (typeof value != 'undefined' && value != null) {
-                    return value;
-                } else {
-                    throw "NoSuchElementException";
-                }
-            },
-
-            getOrElse: function (elseVal) {
+    var Try = function (value) {
+        var tryObj = {
+            getOrElse: function (val) {
                 try {
-                    return this.getVal()
+                    if (typeof value == 'function') {
+                        return value();
+                    }
+                    return value;
                 } catch (e) {
-                    return Option(elseVal).getVal()
+                    if (typeof val == 'function') {
+                        return val();
+                    }
+                    return val;
                 }
             }
-        }
+        };
+        return tryObj;
     };
+
+    var Option = function (value) {
+        var opt = {
+            val: function () {
+                return Try(value).getOrElse(function () {
+                    throw "NoSuchElementException";
+                });
+            },
+            getVal: function () {
+                var val = opt.val();
+                if (opt._isEmpty(val)) {
+                    throw "NoSuchElementException";
+                }
+                return val;
+            },
+            getOrElse: function (elseVal) {
+                return Try(opt.getVal).getOrElse(elseVal);
+            },
+            _isEmpty: function (val) {
+                return typeof val == 'undefined' || val === null;
+            },
+            isEmpty: function () {
+                return opt._isEmpty(opt.val());
+            },
+            fold: function (zero) {
+                return function (transform) {
+                    var val = opt.val();
+                    if (opt._isEmpty(val)) {
+                        return zero;
+                    } else if (typeof transform == 'function') {
+                        return transform(val);
+                    } else {
+                        return transform;
+                    }
+                }
+            }
+        };
+        return opt;
+    };
+
 
     function compile(compiler, opts) {
         var moduleType = Option(function () {
@@ -79,6 +116,11 @@
         var output = path.join(target, outputFile);
 
         var moduleName = outputFile.replace(/^js\//i, '').replace(/\.js$/i, '');
+        moduleName = Option(function () {
+            return options.prefix;
+        }).fold(moduleName)(function (prefix) {
+            return prefix + "/" + moduleName;
+        });
 
         mkdirp(path.dirname(output), function (e) {
             fs.readFile(input, "utf8", function (e, contents) {
